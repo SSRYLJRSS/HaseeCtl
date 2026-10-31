@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>HaseeCtl.App</RootNamespace>
+    <AssemblyName>HaseeCtl.App</AssemblyName>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\HaseeCtl.Core\HaseeCtl.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../native/InsydeAirplanemodehid.dll" Link="InsydeAirplanemodehid.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../native/InsydeAirplanemodehid.dll')" />
+  </ItemGroup>
+</Project>

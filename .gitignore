@@ -1,0 +1,10 @@
+bin/
+obj/
+dist/
+.vs/
+*.user
+*.log
+_shots/
+_*/
+# 厂商专有二进制（来自官方驱动包，不随源码分发）
+native/*.dll

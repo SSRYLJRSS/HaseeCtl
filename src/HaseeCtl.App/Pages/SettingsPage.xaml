@@ -1,0 +1,73 @@
+<UserControl x:Class="HaseeCtl.App.Pages.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="4,8,4,4">
+            <TextBlock Text="设置与关于" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,14"
+                       Text="所有配置都保存在本地 JSON 文件里，可以直接备份或手动编辑。" />
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="行为" />
+                    <CheckBox x:Name="ResumeCheck" Content="睡眠/休眠唤醒后自动重新应用全部设置" Click="OnResumeChanged" Margin="0,0,0,10" />
+                    <CheckBox x:Name="OsdCheck" Content="显示屏幕提示（OSD）" Click="OnOsdChanged" Margin="0,0,0,10" />
+                    <CheckBox x:Name="StartupCheck" Content="开机自动应用设置" Click="OnStartupChanged" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="系统与键盘" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
+                               Text="对应官方控制中心「偏好设置」。Fn+F1 切触控板、Fn+F2 关屏由 Agent 处理。" />
+                    <CheckBox x:Name="TouchpadCheck" Content="触控板" Click="OnTouchpadChanged" Margin="0,0,0,10" />
+                    <CheckBox x:Name="CameraCheck" Content="摄像头（关闭后系统里看不到摄像头设备）" Click="OnCameraChanged" Margin="0,0,0,10" />
+                    <CheckBox x:Name="FnLockCheck" Content="Fn 锁定（F1~F12 默认执行 Fn 功能）" Click="OnKeyboardChanged" Margin="0,0,0,10" />
+                    <CheckBox x:Name="WinLockCheck" Content="锁定 Win 键（游戏时防误触）" Click="OnKeyboardChanged" Margin="0,0,0,10" />
+                    <CheckBox x:Name="SwapCheck" Content="交换 Fn 与 Win 键位置" Click="OnKeyboardChanged" Margin="0,0,0,10" />
+                    <CheckBox x:Name="LowRefreshCheck" Content="电池供电时自动降低屏幕刷新率（省电）" Click="OnLowRefreshChanged" Margin="0,0,0,12" />
+                    <WrapPanel>
+                        <Button Content="关闭屏幕" Click="OnScreenOff" Padding="14,7" Margin="0,0,10,8" />
+                        <Button Content="切换飞行模式" Click="OnAirplane" Padding="14,7" Margin="0,0,10,8" />
+                    </WrapPanel>
+                    <TextBlock x:Name="SystemStatus" Style="{StaticResource Hint}" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="文件位置" />
+                    <TextBlock x:Name="ConfigPathText" Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                    <TextBlock x:Name="LogPathText" Style="{StaticResource Hint}" Margin="0,0,0,12" />
+                    <WrapPanel>
+                        <Button Content="打开配置目录" Click="OnOpenConfig" Padding="14,7" Margin="0,0,10,8" />
+                        <Button Content="打开日志目录" Click="OnOpenLogs" Padding="14,7" Margin="0,0,10,8" />
+                        <Button Content="重新加载配置" Click="OnReload" Padding="14,7" Margin="0,0,10,8" />
+                        <Button Content="重新应用全部设置" Click="OnReapply" Padding="14,7" Margin="0,0,10,8" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="硬件自检" />
+                    <TextBlock x:Name="CapsText" Style="{StaticResource Hint}" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="关于" />
+                    <TextBlock x:Name="AboutText" Style="{StaticResource Hint}" Margin="0,0,0,10" />
+                    <TextBlock x:Name="RepoText" Style="{StaticResource Hint}" Margin="0,0,0,12" />
+                    <WrapPanel>
+                        <Button Content="GitHub 项目主页" Click="OnOpenRepo" Padding="14,7" Margin="0,0,10,8" />
+                        <Button x:Name="UpdateButton" Content="检查更新" Click="OnCheckUpdate" Padding="14,7" Margin="0,0,10,8" />
+                    </WrapPanel>
+                    <TextBlock x:Name="UpdateStatus" Style="{StaticResource Hint}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

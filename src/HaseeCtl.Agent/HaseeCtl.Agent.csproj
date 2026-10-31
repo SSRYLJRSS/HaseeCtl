@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HaseeCtl.Agent</RootNamespace>
+    <AssemblyName>HaseeCtl.Agent</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\app.ico" LogicalName="HaseeCtl.Agent.app.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\HaseeCtl.Core\HaseeCtl.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../native/InsydeAirplanemodehid.dll" Link="InsydeAirplanemodehid.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../native/InsydeAirplanemodehid.dll')" />
+  </ItemGroup>
+</Project>

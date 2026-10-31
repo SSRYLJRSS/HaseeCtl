@@ -1,0 +1,36 @@
+<UserControl x:Class="HaseeCtl.App.Pages.PerformancePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="4,8,4,4">
+            <TextBlock Text="性能模式" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,14"
+                       Text="切换性能模式会同时调整 CPU/GPU 功耗墙、风扇策略与动态调优。" />
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="当前模式" />
+                    <TextBlock x:Name="CurrentText" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,14" Text="—" />
+                    <StackPanel x:Name="ModePanel" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="选项" />
+                    <CheckBox x:Name="TurboCheck" Content="启用强冷（Turbo Fan，风扇更快但更吵）"
+                              Margin="0,0,0,10" Click="OnTurboChanged" />
+                    <CheckBox x:Name="BootApplyCheck" Content="开机与唤醒后自动应用选中模式" Click="OnBootApplyChanged" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="说明" />
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="本机 BIOS 未提供性能模式支持位，因此可选模式按固件默认循环列出；所选模式会写入 EC 并在重启后保持。" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

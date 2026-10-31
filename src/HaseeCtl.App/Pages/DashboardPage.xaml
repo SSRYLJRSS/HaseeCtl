@@ -1,0 +1,88 @@
+<UserControl x:Class="HaseeCtl.App.Pages.DashboardPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="4,8,4,4">
+            <TextBlock Text="概览" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBlock Style="{StaticResource Hint}" Text="实时温度与转速来自 EC，每秒刷新一次。" Margin="0,0,0,14" />
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="CPU 风扇" />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Metric}" Text="{Binding CpuTemp}" />
+                            <TextBlock Style="{StaticResource MetricUnit}" Text="°C" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="{Binding CpuRpm}" FontSize="18" />
+                            <TextBlock Style="{StaticResource MetricUnit}" Text="RPM" />
+                            <TextBlock Text="{Binding CpuDuty}" FontSize="18" Margin="18,0,0,0" />
+                            <TextBlock Style="{StaticResource MetricUnit}" Text="% PWM" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="GPU 风扇" />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Metric}" Text="{Binding GpuTemp}" />
+                            <TextBlock Style="{StaticResource MetricUnit}" Text="°C" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="{Binding GpuRpm}" FontSize="18" />
+                            <TextBlock Style="{StaticResource MetricUnit}" Text="RPM" />
+                            <TextBlock Text="{Binding GpuDuty}" FontSize="18" Margin="18,0,0,0" />
+                            <TextBlock Style="{StaticResource MetricUnit}" Text="% PWM" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="当前状态" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="性能模式" Margin="0,0,20,6" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="PowerModeText" Text="—" Margin="0,0,0,6" />
+                        <TextBlock Grid.Row="1" Text="风扇模式" Margin="0,0,20,6" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="FanModeText" Text="—" Margin="0,0,0,6" />
+                        <TextBlock Grid.Row="2" Text="充电上限" Margin="0,0,20,6" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ChargeText" Text="—" Margin="0,0,0,6" />
+                        <TextBlock Grid.Row="3" Text="显卡模式" Margin="0,0,20,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" x:Name="GpuText" Text="—" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="快捷操作" />
+                    <WrapPanel>
+                        <Button Content="全速风扇 3 秒" Click="OnFanMax" Margin="0,0,10,10" Padding="14,6" />
+                        <Button Content="风扇恢复自动" Click="OnFanAuto" Margin="0,0,10,10" Padding="14,6" />
+                        <Button Content="切换性能模式" Click="OnCyclePower" Margin="0,0,10,10" Padding="14,6" />
+                        <Button Content="重新应用全部设置" Click="OnReapply" Margin="0,0,10,10" Padding="14,6" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
