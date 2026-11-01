@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using HaseeCtl.App.Controls;
 using HaseeCtl.Core.Config;
 using HaseeCtl.Core.Features;
@@ -13,15 +14,22 @@ public partial class FanPage : UserControl
     private bool _loading;
     private bool _showGpu;
 
-    /// <summary>Editable copy of the saved profiles. Edits stay here until a save/apply button commits them
-    /// through <see cref="UiState.Update"/>, so a reload triggered by the Agent can never drop them.</summary>
+    /// <summary>Editable copy of the saved profiles. Edits land here first, then get committed to
+    /// settings + EC by the debounced auto-save, so a reload triggered by the Agent cannot drop them.</summary>
     private List<FanProfile> _draft = [];
+
+    /// <summary>Debounce for the auto-save: dragging fires on every mouse-up, and each commit
+    /// writes the settings file and pushes a table to the EC, so coalesce the bursts.</summary>
+    private readonly DispatcherTimer _autoSave = new() { Interval = TimeSpan.FromMilliseconds(300) };
+    private bool _autoSaveArmed;
 
     public FanPage()
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        Unloaded += (_, _) => _autoSave.Stop();
         Curve.CurveChanged += OnCurveDragged;
+        _autoSave.Tick += (_, _) => { _autoSave.Stop(); FlushAutoSave(); };
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -85,9 +93,50 @@ public partial class FanPage : UserControl
     {
         CurveInfo.Text = $"节点 2：{c.T2}°C → {c.D2}%    节点 3：{c.T3}°C → {c.D3}%    " +
                          $"起转 {Curve.T1:0}°C（固件固定）/{c.D1}%（参与斜率）    满载 100°C/100%（固件固定）";
-        ProfileHint.Text = $"当前方案：{p.Name}（共 {_draft.Count} 个）。" +
-                           "拖动圆点后点「保存修改」写入配置，点「应用此方案」立即下发到 EC。";
+        ShowStatus();
     }
+
+    /// <summary>One always-on status line: which profile is live, and whether the EC is on our
+    /// custom curve or still on a firmware mode (the mode buttons can leave it there).</summary>
+    private void ShowStatus(string? transient = null, bool error = false)
+    {
+        if (_state is null) return;
+        string text;
+        if (transient is not null) text = transient;
+        else
+        {
+            var name = Selected?.Name ?? "—";
+            var mode = _state.Settings.Fan.Mode;
+            text = mode == "custom"
+                ? $"已生效：{name} · 自定义曲线（共 {_draft.Count} 个方案）"
+                : $"已生效：{name} · 当前为固件「{ModeLabel(mode)}」档，曲线未生效；拖动曲线或换方案即切回自定义";
+        }
+        ProfileHint.Text = text;
+    }
+
+    private static string ModeLabel(string mode) => mode switch
+    {
+        "auto" => "自动",
+        "silent" => "静音",
+        "max" => "最大",
+        "slow" => "慢速",
+        "maxq" => "静音优先",
+        _ => mode,
+    };
+
+    /// <summary>Set the hint text and paint it red while it carries a validation error.</summary>
+    private void ShowError(string msg)
+    {
+        ProfileHint.Text = msg;
+        ProfileHint.Foreground = errorBrush.Value;
+    }
+
+    private static readonly Lazy<System.Windows.Media.Brush> errorBrush = new(() =>
+    {
+        var b = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0x5C, 0x5C));
+        b.Freeze();
+        return b;
+    });
 
     private void UpdateMarker()
     {
@@ -111,12 +160,52 @@ public partial class FanPage : UserControl
         c.T2 = (int)Curve.T2; c.D2 = (int)Curve.D2;
         c.T3 = (int)Curve.T3; c.D3 = (int)Curve.D3;
         RefreshInfo(p, c);
+        ArmAutoSave();
     }
 
+    /// <summary>Selecting a profile in the combo box applies it immediately — same path as the
+    /// old "应用此方案" button, so the dropdown is the only fan switch the user needs.</summary>
     private void OnProfileChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading) return;
         LoadCurveIntoEditor();
+        var p = Selected;
+        if (p is null || _state is null) return;
+        if (!CommitEditor(out var err)) { ShowError(err); return; }
+        try
+        {
+            SaveDraft(p, activate: true);
+            _state.Engine.SelectFanProfile(p.Name);
+            ShowStatus();
+        }
+        catch (Exception ex) { ShowError("下发失败：" + ex.Message); }
+    }
+
+    /// <summary>(Re)start the debounce window; the actual commit happens in <see cref="FlushAutoSave"/>.</summary>
+    private void ArmAutoSave()
+    {
+        if (_state is null) return;
+        _autoSaveArmed = true;
+        _autoSave.Stop();
+        _autoSave.Start();
+    }
+
+    /// <summary>Commit the draft curve, push it to the EC and switch to custom mode. Validation
+    /// failures only paint the hint line red — a modal dialog on every drag would be unusable.</summary>
+    private void FlushAutoSave()
+    {
+        if (!_autoSaveArmed) return;
+        _autoSaveArmed = false;
+        var p = Selected;
+        if (p is null || _state is null) return;
+        if (!CommitEditor(out var err)) { ShowError(err); return; }
+        try
+        {
+            SaveDraft(p, activate: true, mode: "custom");
+            _state.Engine.ApplyFan();
+            ShowStatus();
+        }
+        catch (Exception ex) { ShowError("下发失败：" + ex.Message); }
     }
 
     private bool CommitEditor(out string error)
@@ -157,46 +246,22 @@ public partial class FanPage : UserControl
         });
     }
 
-    private void OnApplyProfile(object sender, RoutedEventArgs e)
-    {
-        if (!CommitEditor(out var err)) { Warn(err); return; }
-        try
-        {
-            var p = Selected!;
-            SaveDraft(p, activate: true, mode: "custom");
-            _state!.Engine.ApplyFan();
-            ProfileHint.Text = $"已下发并生效：{p.Name}";
-        }
-        catch (Exception ex) { Warn(ex.Message); }
-    }
-
-    private void OnSaveProfile(object sender, RoutedEventArgs e)
-    {
-        if (!CommitEditor(out var err)) { Warn(err); return; }
-        try
-        {
-            var p = Selected!;
-            SaveDraft(p, activate: true);
-            ProfileHint.Text = $"已保存方案：{p.Name}（下次开机/唤醒会自动应用）";
-        }
-        catch (Exception ex) { Warn(ex.Message); }
-    }
-
     private void OnSaveAs(object sender, RoutedEventArgs e)
     {
-        if (!CommitEditor(out var err)) { Warn(err); return; }
+        if (!CommitEditor(out var err)) { ShowError(err); return; }
         var name = InputDialog.Ask(this, "新建方案", "方案名称：", Selected!.Name + " 副本")?.Trim();
         if (string.IsNullOrWhiteSpace(name)) return;
-        if (_draft.Any(p => p.Name == name) || _state!.Settings.Fan.Profiles.Any(p => p.Name == name)) { Warn("同名方案已存在。"); return; }
+        if (_draft.Any(p => p.Name == name) || _state!.Settings.Fan.Profiles.Any(p => p.Name == name)) { ShowError("同名方案已存在。"); return; }
         try
         {
             var copy = CloneProfile(Selected!);
             copy.Name = name;
-            SaveDraft(copy, activate: true);
+            SaveDraft(copy, activate: true, mode: "custom");
             ReloadProfiles();
-            ProfileHint.Text = $"已新建方案：{name}";
+            _state.Engine.ApplyFan();
+            ShowStatus();
         }
-        catch (Exception ex) { Warn(ex.Message); }
+        catch (Exception ex) { ShowError("新建失败：" + ex.Message); }
     }
 
     private static CurveSettings Clone(CurveSettings c) => new()
@@ -236,32 +301,6 @@ public partial class FanPage : UserControl
         ReloadProfiles();
     }
 
-    private void OnApplyCurve(object sender, RoutedEventArgs e)
-    {
-        if (!CommitEditor(out var err)) { Warn(err); return; }
-        try
-        {
-            SaveDraft(Selected!, activate: true, mode: "custom");
-            _state!.Engine.ApplyFan();
-            ProfileHint.Text = "已应用自定义曲线，EC 当前处于自定义模式。";
-        }
-        catch (Exception ex) { Warn(ex.Message); }
-    }
-
-    private void OnPushOnly(object sender, RoutedEventArgs e)
-    {
-        if (!CommitEditor(out var err)) { Warn(err); return; }
-        try
-        {
-            var p = Selected!;
-            SaveDraft(p, activate: false);
-            var table = p.ToTable();
-            _state!.Engine.WithHardware(() => _state.Engine.Fan?.PushTableOnly(table));
-            ProfileHint.Text = "曲线已写入固件表，风扇模式保持不变。";
-        }
-        catch (Exception ex) { Warn(ex.Message); }
-    }
-
     private void OnCopyCpuToGpu(object sender, RoutedEventArgs e)
     {
         var p = Selected;
@@ -269,38 +308,40 @@ public partial class FanPage : UserControl
         p.Gpu1.T2 = p.Cpu.T2; p.Gpu1.D2 = p.Cpu.D2;
         p.Gpu1.T3 = p.Cpu.T3; p.Gpu1.D3 = p.Cpu.D3;
         LoadCurveIntoEditor();
-        ProfileHint.Text = "已把 CPU 曲线复制到 GPU，记得点「保存修改」。";
+        FlushNow();
+    }
+
+    /// <summary>Commit and push immediately (button actions), skipping the debounce window.</summary>
+    private void FlushNow()
+    {
+        _autoSave.Stop();
+        _autoSaveArmed = true;
+        FlushAutoSave();
     }
 
     private void OnRestoreDefaults(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show("把固件自带的曲线恢复回去？保存的自定义方案不会被删除。", "HaseeCtl",
+        if (MessageBox.Show("把当前方案的曲线恢复成固件出厂值并立即生效？其他自定义方案不受影响。", "HaseeCtl",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         try
         {
-            var engine = _state!.Engine;
-            _defaults = engine.WithHardware(() =>
-            {
-                engine.Fan?.RestoreDefaults();
-                return engine.Fan?.ReadDefaults();
-            });
-            // the firmware is back in automatic mode; record it, or the Agent would re-push the custom curve
-            _state.Update(s => s.Fan.Mode = "auto");
+            var p = Selected;
+            if (p is null || _state is null) return;
+            // read the firmware's own curve, then write it into the profile instead of leaving the EC in auto
+            _defaults = _state.Engine.WithHardware(() => _state.Engine.Fan?.ReadDefaults());
             if (_defaults is not null)
             {
-                var p = Selected;
-                if (p is not null)
-                {
-                    p.Cpu.T2 = _defaults.Cpu.T2; p.Cpu.D2 = _defaults.Cpu.D2;
-                    p.Cpu.T3 = _defaults.Cpu.T3; p.Cpu.D3 = _defaults.Cpu.D3;
-                    p.Gpu1.T2 = _defaults.Gpu1.T2; p.Gpu1.D2 = _defaults.Gpu1.D2;
-                    p.Gpu1.T3 = _defaults.Gpu1.T3; p.Gpu1.D3 = _defaults.Gpu1.D3;
-                }
+                p.Cpu.T2 = _defaults.Cpu.T2; p.Cpu.D2 = _defaults.Cpu.D2;
+                p.Cpu.T3 = _defaults.Cpu.T3; p.Cpu.D3 = _defaults.Cpu.D3;
+                p.Cpu.D1 = _defaults.Cpu.D1;
+                p.Gpu1.T2 = _defaults.Gpu1.T2; p.Gpu1.D2 = _defaults.Gpu1.D2;
+                p.Gpu1.T3 = _defaults.Gpu1.T3; p.Gpu1.D3 = _defaults.Gpu1.D3;
+                p.Gpu1.D1 = _defaults.Gpu1.D1;
             }
             LoadCurveIntoEditor();
-            ProfileHint.Text = "已恢复固件默认曲线并切回自动模式；默认值已填入编辑器，点「保存修改」可存入当前方案。";
+            FlushNow();
         }
-        catch (Exception ex) { Warn(ex.Message); }
+        catch (Exception ex) { ShowError("恢复出厂失败：" + ex.Message); }
     }
 
     private void OnModeAuto(object sender, RoutedEventArgs e) => SetMode("auto", "自动");
@@ -313,7 +354,7 @@ public partial class FanPage : UserControl
         try
         {
             _state!.Engine.SetFanMode(mode);
-            ProfileHint.Text = $"风扇已切到「{label}」模式。切回自定义请点「应用曲线」。";
+            ShowStatus($"风扇已切到固件「{label}」档。拖动曲线或重新选择方案即可切回自定义。");
         }
         catch (Exception ex) { Warn(ex.Message); }
     }

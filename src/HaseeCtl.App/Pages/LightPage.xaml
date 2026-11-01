@@ -50,10 +50,10 @@
                     <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
                                Text="点预设色应用到「当前区」；选择区：左 → 中 → 右 → 全部，点同一色可连续切换。" />
                     <WrapPanel Margin="0,10,0,0">
-                        <RadioButton x:Name="ZoneLeft" Content="左区" GroupName="zone" IsChecked="True" Margin="0,0,14,8" />
-                        <RadioButton x:Name="ZoneMid" Content="中区" GroupName="zone" Margin="0,0,14,8" />
-                        <RadioButton x:Name="ZoneRight" Content="右区" GroupName="zone" Margin="0,0,14,8" />
-                        <RadioButton x:Name="ZoneAll" Content="全部" GroupName="zone" Margin="0,0,14,8" />
+                        <RadioButton x:Name="ZoneLeft" Style="{StaticResource Segment}" Content="左区" GroupName="zone" IsChecked="True" Margin="0,0,0,8" />
+                        <RadioButton x:Name="ZoneMid" Style="{StaticResource Segment}" Content="中区" GroupName="zone" Margin="0,0,0,8" />
+                        <RadioButton x:Name="ZoneRight" Style="{StaticResource Segment}" Content="右区" GroupName="zone" Margin="0,0,0,8" />
+                        <RadioButton x:Name="ZoneAll" Style="{StaticResource Segment}" Content="全部" GroupName="zone" Margin="0,0,0,8" />
                     </WrapPanel>
                     <Button Content="应用颜色" Click="OnApplyColors" Padding="18,7" HorizontalAlignment="Left" Margin="0,4,0,0" />
                 </StackPanel>

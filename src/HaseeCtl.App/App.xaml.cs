@@ -15,6 +15,15 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // monochrome accent: replace WPF-UI's system (blue) accent with a grey ramp so check
+        // boxes, sliders, radio buttons and focus rings match the black/white fan page.
+        // system accent stays mid-grey because it backs text selection (white text on top).
+        Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(
+            System.Windows.Media.Color.FromRgb(0x5A, 0x5A, 0x5A),
+            System.Windows.Media.Color.FromRgb(0xE6, 0xE6, 0xE6),
+            System.Windows.Media.Color.FromRgb(0xFF, 0xFF, 0xFF),
+            System.Windows.Media.Color.FromRgb(0xD0, 0xD0, 0xD0));
+
         // self-test mode: render every page to PNG and exit (no screen capture involved)
         var shotIndex = Array.FindIndex(e.Args, a => a == "--shot");
         if (shotIndex >= 0 && shotIndex + 1 < e.Args.Length)
