@@ -67,7 +67,7 @@ public class FanCurveEditor : FrameworkElement
     public double D4 { get => _d4; set { _d4 = value; InvalidateVisual(); } }
 
     /// <summary>Shown next to the locked start-up node so the user knows it is firmware owned.</summary>
-    public string LockedHint { get; set; } = "固件固定";
+    public string LockedHint { get; set; } = "温度固件固定 · 可上下拖";
 
     /// <summary>Current sensor temperature, drawn as a vertical marker when set.</summary>
     public double? MarkerTemp
@@ -185,7 +185,7 @@ public class FanCurveEditor : FrameworkElement
         for (int i = 0; i < 4; i++)
         {
             var pt = NodePoint(i);
-            bool locked = i == 0 || i == 3;
+            bool locked = i == 3; // 起转点 0 只锁温度，转速可上下拖
             bool active = (i == _drag) || (!locked && _hover && HitTest(i, Mouse.GetPosition(this)));
             double radius = locked ? 5 : active ? 9 : 7;
             if (!locked && active)
@@ -249,6 +249,11 @@ public class FanCurveEditor : FrameworkElement
                 _t2 = ToTemp(p);
                 _d2 = ToDuty(p);
             }
+            else if (_drag == 0)
+            {
+                // 起转温度由固件决定，这里只改起转转速，且不能高于节点 2
+                _d1 = Clamp(ToDuty(p), 0, _d2);
+            }
             else if (_drag == 2)
             {
                 _t3 = ToTemp(p);
@@ -258,7 +263,7 @@ public class FanCurveEditor : FrameworkElement
             return;
         }
 
-        bool over = NodeAt(p) is 1 or 2;
+        bool over = NodeAt(p) is 0 or 1 or 2;
         if (over != _hover)
         {
             _hover = over;
@@ -271,7 +276,7 @@ public class FanCurveEditor : FrameworkElement
     {
         base.OnMouseLeftButtonDown(e);
         int node = NodeAt(e.GetPosition(this));
-        if (node is 1 or 2)
+        if (node is 0 or 1 or 2)
         {
             _drag = node;
             CaptureMouse();

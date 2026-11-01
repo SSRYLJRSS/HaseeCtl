@@ -92,7 +92,7 @@ public partial class FanPage : UserControl
     private void RefreshInfo(FanProfile p, CurveSettings c)
     {
         CurveInfo.Text = $"节点 2：{c.T2}°C → {c.D2}%    节点 3：{c.T3}°C → {c.D3}%    " +
-                         $"起转 {Curve.T1:0}°C（固件固定）/{c.D1}%（参与斜率）    满载 100°C/100%（固件固定）";
+                         $"起转 {Curve.T1:0}°C（温度固件固定）/{c.D1}%（可上下拖）    满载 100°C/100%（固件固定）";
         ShowStatus();
     }
 
@@ -157,6 +157,7 @@ public partial class FanPage : UserControl
         var p = Selected;
         var c = CurrentCurve;
         if (p is null || c is null) return;
+        c.D1 = (int)Curve.D1;
         c.T2 = (int)Curve.T2; c.D2 = (int)Curve.D2;
         c.T3 = (int)Curve.T3; c.D3 = (int)Curve.D3;
         RefreshInfo(p, c);

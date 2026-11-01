@@ -7,7 +7,7 @@
         <StackPanel Margin="4,8,4,4">
             <TextBlock Text="风扇控制" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,4" />
             <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,14"
-                       Text="选中方案即刻生效；拖动曲线上的圆点松手后自动保存并下发，无需再点保存。越往右越晚转、越往上越猛，起转点与满载点由固件固定。" />
+                       Text="选中方案即刻生效；拖动曲线上的圆点松手后自动保存并下发，无需再点保存。越往右越晚转、越往上越猛，起转点温度由固件固定（转速可上下拖），满载点固定为 100°C/100%。" />
 
             <Border Style="{StaticResource Card}">
                 <StackPanel>
