@@ -93,7 +93,8 @@ if (args.Length > 0 && args[0] == "--iotest")
         System.IO.Directory.CreateDirectory(dir);
         System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "iotest.txt"), DateTime.Now.ToString());
         Console.WriteLine("写入成功");
-        var ok = HaseeCtl.Core.Config.SettingsStore.Load();
+        var loaded = HaseeCtl.Core.Config.SettingsStore.Load();
+        if (loaded.Settings is not { } ok) { Console.WriteLine("Load 失败: " + loaded.Error); return; }
         Console.WriteLine("Load 成功, 方案数=" + ok.Fan.Profiles.Count);
         HaseeCtl.Core.Config.SettingsStore.Save(ok);
         Console.WriteLine("Save 成功, 文件存在=" + System.IO.File.Exists(HaseeCtl.Core.Config.SettingsStore.FilePath));

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using HaseeCtl.Core.Config;
 using HaseeCtl.Core.Features;
 
@@ -13,6 +14,9 @@ public partial class LightPage : UserControl
     private (byte R, byte G, byte B) _left = (0, 0, 200);
     private (byte R, byte G, byte B) _mid = (0, 0, 200);
     private (byte R, byte G, byte B) _right = (0, 0, 200);
+
+    /// <summary>Dragging the slider fires ValueChanged for every step; write the EC and the file once it settles.</summary>
+    private readonly DispatcherTimer _brightnessCommit = new() { Interval = TimeSpan.FromMilliseconds(250) };
 
     private static readonly (LightEffect Effect, string Name)[] Effects =
     [
@@ -30,7 +34,11 @@ public partial class LightPage : UserControl
     public LightPage()
     {
         InitializeComponent();
+        BrightnessSlider.Minimum = KeyboardLightService.MinBrightness;
+        BrightnessSlider.Maximum = KeyboardLightService.MaxBrightness;
+        _brightnessCommit.Tick += (_, _) => CommitBrightness();
         Loaded += OnLoaded;
+        Unloaded += (_, _) => { if (_brightnessCommit.IsEnabled) CommitBrightness(); };
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -47,18 +55,21 @@ public partial class LightPage : UserControl
         {
             try
             {
-                EnableCheck.IsChecked = light.Enabled;
-                BrightnessSlider.Value = Math.Clamp(light.Brightness, 0, 9);
-                _left = light.Left; _mid = light.Mid; _right = light.Right;
-                int idx = Array.FindIndex(Effects, x => x.Effect == light.Effect);
+                var (enabled, brightness, left, mid, right, effect) = _state.Engine.WithHardware(() =>
+                    (light.Enabled, light.Brightness, light.Left, light.Mid, light.Right, light.Effect));
+                EnableCheck.IsChecked = enabled;
+                BrightnessSlider.Value = Math.Clamp(brightness, KeyboardLightService.MinBrightness, KeyboardLightService.MaxBrightness);
+                _left = left; _mid = mid; _right = right;
+                int idx = Array.FindIndex(Effects, x => x.Effect == effect);
                 EffectBox.SelectedIndex = idx < 0 ? 0 : idx;
             }
-            catch (Exception ex) { Log.Write("读取键盘灯失败: " + ex.Message); }
+            catch (Exception ex) { Log.Error("读取键盘灯失败", ex); }
         }
         else
         {
             EffectBox.SelectedIndex = 0;
             EnableCheck.IsChecked = _state.Settings.Light.Enabled;
+            BrightnessSlider.Value = _state.Settings.Light.Brightness;
         }
 
         BrightnessText.Text = ((int)BrightnessSlider.Value).ToString();
@@ -110,20 +121,9 @@ public partial class LightPage : UserControl
         if (_state is null || _loading) return;
         try
         {
-            _state.Engine.Light?.ApplyZones(_left, _mid, _right);
-            SaveSettings();
+            _state.Engine.SetLightColors(_left, _mid, _right);
         }
         catch (Exception ex) { Warn(ex.Message); }
-    }
-
-    private void SaveSettings()
-    {
-        if (_state is null) return;
-        var s = _state.Settings.Light;
-        s.Left = [_left.R, _left.G, _left.B];
-        s.Mid = [_mid.R, _mid.G, _mid.B];
-        s.Right = [_right.R, _right.G, _right.B];
-        _state.Save();
     }
 
     private void OnApplyColors(object sender, RoutedEventArgs e) => ApplyColorOnly();
@@ -133,10 +133,7 @@ public partial class LightPage : UserControl
         if (_loading || _state is null) return;
         try
         {
-            var on = EnableCheck.IsChecked == true;
-            _state.Settings.Light.Enabled = on;
-            _state.Save();
-            _state.Engine.Light?.SetEnabled(on);
+            _state.Engine.SetLightEnabled(EnableCheck.IsChecked == true);
         }
         catch (Exception ex) { Warn(ex.Message); }
     }
@@ -145,12 +142,15 @@ public partial class LightPage : UserControl
     {
         if (BrightnessText is not null) BrightnessText.Text = ((int)e.NewValue).ToString();
         if (_loading || _state is null) return;
-        try
-        {
-            _state.Settings.Light.Brightness = (int)e.NewValue;
-            _state.Save();
-            _state.Engine.Light?.SetBrightness((int)e.NewValue);
-        }
+        _brightnessCommit.Stop();
+        _brightnessCommit.Start();
+    }
+
+    private void CommitBrightness()
+    {
+        _brightnessCommit.Stop();
+        if (_state is null) return;
+        try { _state.Engine.SetLightBrightness((int)Math.Round(BrightnessSlider.Value)); }
         catch (Exception ex) { Warn(ex.Message); }
     }
 
@@ -160,12 +160,8 @@ public partial class LightPage : UserControl
         var effect = Effects[EffectBox.SelectedIndex].Effect;
         try
         {
-            _state.Settings.Light.Effect = (int)effect;
-            _state.Save();
-            var light = _state.Engine.Light;
-            if (light is null) return;
-            light.SetEffect(effect);
-            if (effect == LightEffect.CustomZones) light.ApplyZones(_left, _mid, _right);
+            if (effect == LightEffect.CustomZones) _state.Engine.SetLightColors(_left, _mid, _right);
+            _state.Engine.SetLightEffect(effect);
         }
         catch (Exception ex) { Warn(ex.Message); }
     }

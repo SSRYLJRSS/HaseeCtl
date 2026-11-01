@@ -70,6 +70,9 @@ public sealed class Dchu(IAcpiBridge bridge)
 
     public byte ReadAppByte(int page, int offset) => ReadApp(page, offset, 1)[0];
 
+    /// <summary>One whole 256-byte page with a single driver read (use when several bytes are needed).</summary>
+    public byte[] ReadAppPage(int page) => ReadApp(page, 0, 0x100);
+
     public void WriteApp(int page, int offset, ReadOnlySpan<byte> data) => Bridge.WriteAppStore(page, offset, data);
 
     public void WriteAppByte(int page, int offset, byte value) => WriteApp(page, offset, [value]);

@@ -14,7 +14,7 @@ namespace HaseeCtl.Core.Hw;
 public sealed class AcpiBridge : IAcpiBridge
 {
     public static readonly Guid InterfaceGuid = new("86994c74-ad43-4812-b7e7-0c420b5c5fd7");
-    public const string FallbackPath = @"\?\ACPI#CLV0001#1#{86994c74-ad43-4812-b7e7-0c420b5c5fd7}";
+    public const string FallbackPath = @"\\?\ACPI#CLV0001#1#{86994c74-ad43-4812-b7e7-0c420b5c5fd7}";
 
     internal const uint IoctlEvaluate = 0x322400;
     internal const uint IoctlWaitEvent = 0x322404;

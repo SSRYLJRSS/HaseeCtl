@@ -24,8 +24,8 @@ public partial class GpuPage : UserControl
         if (_state is null) return;
 
         ModePanel.Children.Clear();
-        try { _current = _state.Engine.Gpu?.Read(); }
-        catch (Exception ex) { Log.Write("读取显卡模式失败: " + ex.Message); }
+        try { _current = _state.Engine.WithHardware(() => _state.Engine.Gpu?.Read()); }
+        catch (Exception ex) { Log.Error("读取显卡模式失败", ex); }
 
         if (_current is null)
         {
@@ -75,9 +75,9 @@ public partial class GpuPage : UserControl
 
         try
         {
-            _state.Settings.Gpu.Mode = (int)mode.Value;
-            _state.Save();
-            _state.Engine.Gpu?.Switch(mode.Value);
+            var m = mode.Value;
+            _state.Engine.WithHardware(() => _state.Engine.Gpu?.Switch(m));
+            _state.Update(s => s.Gpu.Mode = (int)m);
             HintText.Text = "已写入切换标志，重启后生效。";
             if (reboot) Process.Start(new ProcessStartInfo("shutdown.exe", "-f -r -t 0") { CreateNoWindow = true, UseShellExecute = false });
         }

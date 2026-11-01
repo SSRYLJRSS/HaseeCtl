@@ -68,16 +68,6 @@ public sealed class FanService(Dchu dchu, Capabilities caps)
         dchu.WriteAppByte(AppPage, 7, (byte)v);
     }
 
-    public void SetTurboFan(bool on)
-    {
-        dchu.WriteAppByte(AppPage, 8, (byte)(on ? 1 : 0));
-        if (!on) return;
-        var mode = (FanMode)dchu.ReadAppByte(1, 1);
-        if (mode == FanMode.Silent) return;
-    }
-
-    public void DisableTurboFan() => dchu.WriteAppByte(AppPage, 8, 0);
-
     public void RestoreDefaults()
     {
         dchu.SetWmi(121, 34, 1);
@@ -97,10 +87,12 @@ public sealed class FanService(Dchu dchu, Capabilities caps)
     {
         var b = new byte[256];
         b[0] = 0x01; b[1] = 0x00;
-        b[4] = dchu.ReadAppByte(AppPage, 4);
+        var cur = dchu.ReadAppPage(AppPage); // one driver read for all preserved bytes
+        b[4] = cur[4];
         b[5] = (byte)FanMode.Custom;
-        b[6] = dchu.ReadAppByte(AppPage, 6);
-        b[7] = dchu.ReadAppByte(AppPage, 7);
+        b[6] = cur[6];
+        b[7] = cur[7];
+        b[8] = cur[8]; // turbo-fan flag read by PowerModeService; must survive a curve save
         PutCurve(b, 16, table.Cpu);
         PutCurve(b, 34, table.Gpu1);
         PutCurve(b, 52, table.Gpu2 ?? table.Gpu1);

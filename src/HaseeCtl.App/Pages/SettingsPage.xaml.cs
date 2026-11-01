@@ -64,12 +64,12 @@ public partial class SettingsPage : UserControl
         }
         try
         {
-            CameraCheck.IsChecked = sys.CameraOn;
-            var k = sys.ReadKeyboard();
+            var (camera, k, lowRefresh) = _state!.Engine.WithHardware(() => (sys.CameraOn, sys.ReadKeyboard(), sys.LowRefreshEnabled));
+            CameraCheck.IsChecked = camera;
             FnLockCheck.IsChecked = k.FnLock;
             WinLockCheck.IsChecked = k.WinKeyLock;
             SwapCheck.IsChecked = k.FnWinSwap;
-            LowRefreshCheck.IsChecked = sys.LowRefreshEnabled;
+            LowRefreshCheck.IsChecked = lowRefresh;
             SystemStatus.Text = $"当前刷新率 {Display.CurrentHz()} Hz · 飞行模式{(SystemService.AirplaneOn() ? "开" : "关")}";
         }
         catch (Exception ex) { SystemStatus.Text = "读取失败：" + ex.Message; }
@@ -79,15 +79,25 @@ public partial class SettingsPage : UserControl
     {
         if (_loading || _state?.Engine.Sys is not { } sys) return;
         bool want = TouchpadCheck.IsChecked == true;
-        TouchpadCheck.IsChecked = sys.SetTouchpad(want);
+        bool now = _state.Engine.WithHardware(() => sys.SetTouchpad(want));
+        _loading = true;
+        TouchpadCheck.IsChecked = now;
+        _loading = false;
     }
 
     private void OnCameraChanged(object sender, RoutedEventArgs e)
     {
         if (_loading || _state?.Engine.Sys is not { } sys) return;
-        sys.SetCamera(CameraCheck.IsChecked == true);
-        CameraCheck.IsChecked = sys.CameraOn;
-        SystemStatus.Text = "摄像头已" + (sys.CameraOn ? "开启" : "关闭");
+        bool want = CameraCheck.IsChecked == true;
+        try
+        {
+            bool on = _state.Engine.WithHardware(() => { sys.SetCamera(want); return sys.CameraOn; });
+            _loading = true;
+            CameraCheck.IsChecked = on;
+            _loading = false;
+            SystemStatus.Text = "摄像头已" + (on ? "开启" : "关闭");
+        }
+        catch (Exception ex) { SystemStatus.Text = "写入失败：" + ex.Message; }
     }
 
     private void OnKeyboardChanged(object sender, RoutedEventArgs e)
@@ -95,8 +105,8 @@ public partial class SettingsPage : UserControl
         if (_loading || _state?.Engine.Sys is not { } sys) return;
         try
         {
-            sys.WriteKeyboard(new SystemService.KeyboardOptions(FnLockCheck.IsChecked == true, WinLockCheck.IsChecked == true, SwapCheck.IsChecked == true));
-            var k = sys.ReadKeyboard();
+            var opts = new SystemService.KeyboardOptions(FnLockCheck.IsChecked == true, WinLockCheck.IsChecked == true, SwapCheck.IsChecked == true);
+            var k = _state.Engine.WithHardware(() => { sys.WriteKeyboard(opts); return sys.ReadKeyboard(); });
             _loading = true;
             FnLockCheck.IsChecked = k.FnLock; WinLockCheck.IsChecked = k.WinKeyLock; SwapCheck.IsChecked = k.FnWinSwap;
             _loading = false;
@@ -107,9 +117,17 @@ public partial class SettingsPage : UserControl
     private void OnLowRefreshChanged(object sender, RoutedEventArgs e)
     {
         if (_loading || _state?.Engine.Sys is not { } sys) return;
-        sys.LowRefreshEnabled = LowRefreshCheck.IsChecked == true;
-        sys.ApplyRefreshRate();
-        SystemStatus.Text = $"当前刷新率 {Display.CurrentHz()} Hz";
+        bool on = LowRefreshCheck.IsChecked == true;
+        try
+        {
+            _state.Engine.WithHardware(() =>
+            {
+                sys.LowRefreshEnabled = on;
+                sys.ApplyRefreshRate();
+            });
+            SystemStatus.Text = $"当前刷新率 {Display.CurrentHz()} Hz";
+        }
+        catch (Exception ex) { SystemStatus.Text = "写入失败：" + ex.Message; }
     }
 
     private void OnScreenOff(object sender, RoutedEventArgs e) => SystemService.ScreenOff();
@@ -117,7 +135,7 @@ public partial class SettingsPage : UserControl
     private void OnAirplane(object sender, RoutedEventArgs e)
     {
         if (_state?.Engine.Sys is not { } sys) return;
-        bool on = sys.ToggleAirplane();
+        bool on = _state.Engine.WithHardware(sys.ToggleAirplane);
         SystemStatus.Text = "飞行模式已" + (on ? "开启" : "关闭");
     }
 
@@ -144,8 +162,8 @@ public partial class SettingsPage : UserControl
     private void Save(Action<AppSettings> mutate)
     {
         if (_loading || _state is null) return;
-        mutate(_state.Settings);
-        _state.Save();
+        try { _state.Update(mutate); }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "保存失败", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     private void OnOpenConfig(object sender, RoutedEventArgs e) => Open(SettingsStore.Directory);
@@ -168,7 +186,9 @@ public partial class SettingsPage : UserControl
     {
         try
         {
-            _state!.Engine.ReloadSettings();
+            if (_state is null) return;
+            if (!_state.Engine.ReloadSettings()) throw new InvalidOperationException("配置文件暂时无法读取，已保留当前设置。");
+            OnLoaded(this, e); // show the reloaded values
             MessageBox.Show("已从磁盘重新加载配置。", "HaseeCtl", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -181,7 +201,8 @@ public partial class SettingsPage : UserControl
     {
         try
         {
-            _state!.Engine.ApplyAll();
+            if (_state is null) return;
+            if (!_state.Engine.ApplyAll()) throw new InvalidOperationException("部分设置应用失败，详见日志。");
             MessageBox.Show("已重新应用全部设置。", "HaseeCtl", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)

@@ -24,8 +24,8 @@ public partial class BatteryPage : UserControl
         if (_state is null) return;
         _loading = true;
 
-        try { _limit = _state.Engine.Charge?.Read(); }
-        catch (Exception ex) { Log.Write("读取充电上限失败: " + ex.Message); }
+        try { _limit = _state.Engine.WithHardware(() => _state.Engine.Charge?.Read()); }
+        catch (Exception ex) { Log.Error("读取充电上限失败", ex); }
 
         var starts = _limit?.StartOptions is { Length: > 0 } so ? so : [40, 50, 60, 70, 80, 95];
         var stops = _limit?.StopOptions is { Length: > 0 } sp ? sp : [60, 70, 80, 90, 100];
@@ -48,6 +48,7 @@ public partial class BatteryPage : UserControl
         }
 
         RefreshBattery();
+        StartBox.IsEnabled = StopBox.IsEnabled = EnableCheck.IsChecked == true;
         _loading = false;
         HintText.Text = _limit is null ? "本机未报告充电上限能力。" : $"固件支持：起始 {string.Join(" / ", starts)}%；停止 {string.Join(" / ", stops)}%。";
     }
@@ -73,9 +74,13 @@ public partial class BatteryPage : UserControl
         AcText.Text = BatteryInfo.OnAc() ? "（已接电源）" : "（使用电池中）";
     }
 
+    /// <summary>The checkbox only edits the draft; nothing reaches the EC until 应用 is pressed.</summary>
     private void OnEnableChanged(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
+        bool on = EnableCheck.IsChecked == true;
+        StartBox.IsEnabled = StopBox.IsEnabled = on;
+        HintText.Text = on ? "点「应用」后生效。" : "点「应用」后关闭充电上限（充到 100%）。";
     }
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -109,11 +114,13 @@ public partial class BatteryPage : UserControl
         if (_state is null) return;
         try
         {
-            _state.Settings.Charge.Enabled = enabled;
-            _state.Settings.Charge.Start = start;
-            _state.Settings.Charge.Stop = stop;
-            _state.Save();
-            _state.Engine.ApplyCharge();
+            if (enabled && start >= stop)
+            {
+                HintText.Text = "起始电量必须低于停止电量。";
+                return;
+            }
+            _state.Engine.SetChargeLimit(enabled, start, stop);
+            StartBox.IsEnabled = StopBox.IsEnabled = enabled;
             HintText.Text = enabled
                 ? $"已启用：充到 {stop}% 停止，降到 {start}% 再充。"
                 : "已关闭充电上限，电池会充到 100%。";

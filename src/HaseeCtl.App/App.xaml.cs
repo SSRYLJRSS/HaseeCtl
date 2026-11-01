@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using HaseeCtl.Core.Config;
@@ -21,20 +23,50 @@ public partial class App : Application
             return;
         }
 
-        // only one control-centre window at a time; a second launch exits quietly
+        // only one control-centre window at a time; a second launch brings the first one to the front
         _singleInstance = new Mutex(true, @"Local\HaseeCtl.App.Singleton", out bool isFirst);
         if (!isFirst)
         {
+            _singleInstance.Dispose();
+            _singleInstance = null;
+            ActivateExistingWindow();
             Shutdown();
             return;
         }
 
         DispatcherUnhandledException += OnUnhandled;
         AppDomain.CurrentDomain.UnhandledException += (_, args) => Log.Write("App 未处理异常: " + args.ExceptionObject);
+        TaskScheduler.UnobservedTaskException += (_, args) => { Log.Error("App 后台任务异常", args.Exception); args.SetObserved(); };
         var window = new MainWindow();
         MainWindow = window;
         window.Show();
     }
+
+    private static void ActivateExistingWindow()
+    {
+        try
+        {
+            using var self = Process.GetCurrentProcess();
+            foreach (var p in Process.GetProcessesByName(self.ProcessName))
+            {
+                using (p)
+                {
+                    if (p.Id == self.Id) continue;
+                    var hwnd = p.MainWindowHandle;
+                    if (hwnd == IntPtr.Zero) continue;
+                    if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+                    SetForegroundWindow(hwnd);
+                    return;
+                }
+            }
+        }
+        catch (Exception ex) { Log.Error("激活已打开的窗口失败", ex); }
+    }
+
+    private const int SW_RESTORE = 9;
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
 
     private void RunShotMode(string dir)
     {
@@ -85,7 +117,7 @@ public partial class App : Application
 
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        Log.Write("App UI 异常: " + e.Exception);
+        Log.Error("App UI 异常", e.Exception);
         e.Handled = true;
         MessageBox.Show(e.Exception.Message, "HaseeCtl 出错", MessageBoxButton.OK, MessageBoxImage.Warning);
     }

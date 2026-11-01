@@ -61,18 +61,29 @@ public sealed class HotkeyListener : IDisposable
         }
     }
 
+    /// <summary>Raised on the background thread "hasee-hotkeys"; handlers must marshal to their UI thread.</summary>
     public event Action<int>? HotkeyPressed;
 
+    /// <summary>How often the active channel re-checks whether the other channel should be used.</summary>
+    public static readonly TimeSpan ChannelCheckInterval = TimeSpan.FromSeconds(5);
+
+    private Thread? _thread;
+
+    public bool IsRunning => _thread is { IsAlive: true };
+
+    /// <summary>Start listening. Calling it again while running does nothing.</summary>
     public void Start()
     {
+        if (IsRunning) return;
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
-        var thread = new Thread(() => Run(token)) { IsBackground = true, Name = "hasee-hotkeys" };
-        thread.Start();
+        _thread = new Thread(() => Run(token)) { IsBackground = true, Name = "hasee-hotkeys" };
+        _thread.Start();
     }
 
     private void Run(CancellationToken token)
     {
+        int failures = 0;
         while (!token.IsCancellationRequested)
         {
             try
@@ -85,13 +96,20 @@ public sealed class HotkeyListener : IDisposable
                         ? "热键来源: 服务日志 OutLog (CCDCHUService)"
                         : "热键来源: ACPI 驱动通知 (驱动等待事件)");
                 }
+                // both loops return when the channel choice changes, so we switch over automatically
                 if (service) FollowEventLog(token);
                 else WaitDriverEvent(token);
+                failures = 0;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 if (token.IsCancellationRequested) return;
-                Thread.Sleep(1000);
+                failures++;
+                // log the first failure and then every 60th, so a dead channel is visible but cannot flood the log
+                if (failures == 1 || failures % 60 == 0)
+                    Config.Log.Error($"热键监听出错（第 {failures} 次），稍后重试", ex);
+                _lastSource = null; // re-log the channel when it comes back
+                token.WaitHandle.WaitOne(TimeSpan.FromSeconds(Math.Min(failures, 5)));
             }
         }
     }
@@ -109,10 +127,13 @@ public sealed class HotkeyListener : IDisposable
         }
         try
         {
+            var nextCheck = DateTime.UtcNow + ChannelCheckInterval;
             while (!token.IsCancellationRequested)
             {
-                if (EventLogNative.WaitForSingleObject(signal, 500) != 0) continue;
-                DrainEvents(subscription);
+                if (EventLogNative.WaitForSingleObject(signal, 500) == 0) DrainEvents(subscription);
+                if (DateTime.UtcNow < nextCheck) continue;
+                nextCheck = DateTime.UtcNow + ChannelCheckInterval;
+                if (!UseServiceChannel) return; // CCDCHUService stopped: read the driver directly
             }
         }
         finally
@@ -157,7 +178,14 @@ public sealed class HotkeyListener : IDisposable
 
     private void Dispatch(string xml)
     {
-        if (TryParseCode(xml, out int code)) HotkeyPressed?.Invoke(code);
+        if (TryParseCode(xml, out int code)) Raise(code);
+    }
+
+    /// <summary>A failing handler must not tear down the subscription.</summary>
+    private void Raise(int code)
+    {
+        try { HotkeyPressed?.Invoke(code); }
+        catch (Exception ex) { Config.Log.Error($"处理热键 {code} 失败", ex); }
     }
 
     /// <summary>Extracts the key code from an OutLog event message such as "Arg001^149".</summary>
@@ -184,12 +212,18 @@ public sealed class HotkeyListener : IDisposable
         try
         {
             bridge.RegisterWaitEvent(device, hsa);
+            var nextCheck = DateTime.UtcNow + ChannelCheckInterval;
             while (!token.IsCancellationRequested)
             {
-                if (EventLogNative.WaitForSingleObject(hsa, 500) != 0) continue;
-                EventLogNative.ResetEvent(hsa); // manual-reset event: clear it before reading the code
-                int code = bridge.ReadNotifyValue(device);
-                if (code > 0) HotkeyPressed?.Invoke(code);
+                if (EventLogNative.WaitForSingleObject(hsa, 500) == 0)
+                {
+                    EventLogNative.ResetEvent(hsa); // manual-reset event: clear it before reading the code
+                    int code = bridge.ReadNotifyValue(device);
+                    if (code > 0) Raise(code);
+                }
+                if (DateTime.UtcNow < nextCheck) continue;
+                nextCheck = DateTime.UtcNow + ChannelCheckInterval;
+                if (UseServiceChannel) return; // vendor service took the channel back
             }
         }
         finally
@@ -200,8 +234,9 @@ public sealed class HotkeyListener : IDisposable
 
     public void Dispose()
     {
+        // cancel only: the worker thread still observes the token while it winds down
         _cts?.Cancel();
-        _cts?.Dispose();
-        _cts = null;
+        _thread?.Join(TimeSpan.FromSeconds(2));
+        _thread = null;
     }
 }

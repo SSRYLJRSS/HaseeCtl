@@ -40,6 +40,10 @@ public sealed record FanCurve(byte T1, byte D1, byte T2, byte D2, byte T3, byte 
         return new FanCurve((byte)t1, (byte)d1, (byte)t2, (byte)d2, (byte)t3, (byte)d3);
     }
 
+    /// <summary>
+    /// Shape/range checks only. Deliberately no software minimum duty: the EC and the BIOS table already
+    /// enforce whatever the hardware requires, and a user with extra cooling is free to run the fans slower.
+    /// </summary>
     public string? Validate()
     {
         if (!(T1 < T2 && T2 < T3 && T3 < T4)) return "温度点必须依次递增且小于 100°C";

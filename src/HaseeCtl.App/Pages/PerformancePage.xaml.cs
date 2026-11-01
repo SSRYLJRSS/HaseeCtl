@@ -24,10 +24,16 @@ public partial class PerformancePage : UserControl
 
         _loading = true;
         var engine = _state.Engine;
-        var supported = engine.Power is null
-            ? PowerModes.Supported(engine.Caps!)
-            : PowerModes.Supported(engine.Caps!);
         ModePanel.Children.Clear();
+        if (engine.Caps is null || engine.Power is null)
+        {
+            CurrentText.Text = "未连接驱动";
+            TurboCheck.IsEnabled = false;
+            BootApplyCheck.IsChecked = _state.Settings.ApplyOnStartup;
+            _loading = false;
+            return;
+        }
+        var supported = PowerModes.Supported(engine.Caps);
         foreach (var mode in supported)
         {
             var rb = new RadioButton
@@ -43,16 +49,13 @@ public partial class PerformancePage : UserControl
 
         try
         {
-            if (engine.Power is not null)
-            {
-                var current = engine.Power.Current;
-                CurrentText.Text = PowerModes.DisplayName(current);
-                foreach (RadioButton rb in ModePanel.Children)
-                    if (rb.Tag is PowerModeKind k && k == current) rb.IsChecked = true;
-                TurboCheck.IsChecked = engine.Power.TurboFanEnabled;
-            }
+            var (current, turbo) = engine.WithHardware(() => (engine.Power.Current, engine.Power.TurboFanEnabled));
+            CurrentText.Text = PowerModes.DisplayName(current);
+            foreach (RadioButton rb in ModePanel.Children)
+                if (rb.Tag is PowerModeKind k && k == current) rb.IsChecked = true;
+            TurboCheck.IsChecked = turbo;
         }
-        catch (Exception ex) { Log.Write("读取性能模式失败: " + ex.Message); }
+        catch (Exception ex) { Log.Error("读取性能模式失败", ex); }
 
         BootApplyCheck.IsChecked = _state.Settings.ApplyOnStartup;
         _loading = false;
@@ -64,9 +67,7 @@ public partial class PerformancePage : UserControl
         if (sender is not RadioButton { Tag: PowerModeKind mode }) return;
         try
         {
-            _state.Settings.Performance.Mode = mode.ToString().ToLowerInvariant();
-            _state.Save();
-            _state.Engine.ApplyPerformance();
+            _state.Engine.SetPerformanceMode(mode); // persists, applies and re-pushes the fan curve
             CurrentText.Text = PowerModes.DisplayName(mode);
         }
         catch (Exception ex)
@@ -80,10 +81,7 @@ public partial class PerformancePage : UserControl
         if (_loading || _state is null) return;
         try
         {
-            var on = TurboCheck.IsChecked == true;
-            _state.Settings.Performance.TurboFan = on;
-            _state.Save();
-            _state.Engine.Power?.SetTurboFan(on);
+            _state.Engine.SetTurboFan(TurboCheck.IsChecked == true);
         }
         catch (Exception ex)
         {
@@ -94,7 +92,7 @@ public partial class PerformancePage : UserControl
     private void OnBootApplyChanged(object sender, RoutedEventArgs e)
     {
         if (_loading || _state is null) return;
-        _state.Settings.ApplyOnStartup = BootApplyCheck.IsChecked == true;
-        _state.Save();
+        bool on = BootApplyCheck.IsChecked == true;
+        _state.Update(s => s.ApplyOnStartup = on);
     }
 }

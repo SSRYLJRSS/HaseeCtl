@@ -4,10 +4,15 @@ using System.Windows.Forms;
 
 namespace HaseeCtl.Agent;
 
-/// <summary>Minimal on-screen display: a rounded dark card in the upper middle of the primary screen.</summary>
+/// <summary>Minimal on-screen display: a rounded dark card in the upper middle of the primary screen.
+/// Must be shown on the tray's UI thread (the one running the message loop); see TrayApp.ShowOsd.</summary>
 public sealed class Osd : Form
 {
     private static Osd? _current;
+    private static readonly Font TitleFont = new("Microsoft YaHei UI", 15f, FontStyle.Bold);
+    private static readonly Font SubFont = new("Microsoft YaHei UI", 10f, FontStyle.Regular);
+    private static readonly StringFormat Center = new() { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+    private System.Windows.Forms.Timer? _fade;
     private readonly System.Windows.Forms.Timer _timer;
     private readonly string _title;
     private readonly string _subtitle;
@@ -59,18 +64,15 @@ public sealed class Osd : Form
         using (var brush = new SolidBrush(BackColor))
             g.FillPath(brush, path);
 
-        using var titleFont = new Font("Microsoft YaHei UI", 15f, FontStyle.Bold);
-        using var subFont = new Font("Microsoft YaHei UI", 10f, FontStyle.Regular);
         using var textBrush = new SolidBrush(Color.White);
         using var dimBrush = new SolidBrush(Color.FromArgb(190, 190, 200));
-        var center = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 
         var titleRect = string.IsNullOrEmpty(_subtitle)
             ? new RectangleF(0, 0, Width, Height)
             : new RectangleF(0, 10, Width, 44);
-        g.DrawString(_title, titleFont, textBrush, titleRect, center);
+        g.DrawString(_title, TitleFont, textBrush, titleRect, Center);
         if (!string.IsNullOrEmpty(_subtitle))
-            g.DrawString(_subtitle, subFont, dimBrush, new RectangleF(0, 52, Width, 30), center);
+            g.DrawString(_subtitle, SubFont, dimBrush, new RectangleF(0, 52, Width, 30), Center);
     }
 
     private static GraphicsPath Rounded(Rectangle r, int radius)
@@ -87,16 +89,32 @@ public sealed class Osd : Form
 
     private void FadeOut()
     {
-        var fade = new System.Windows.Forms.Timer { Interval = 30 };
-        fade.Tick += (_, _) =>
+        _fade = new System.Windows.Forms.Timer { Interval = 30 };
+        _fade.Tick += (_, _) =>
         {
             Opacity -= 0.12;
             if (Opacity > 0.1) return;
-            fade.Stop();
-            fade.Dispose();
+            _fade?.Stop();
             Close();
         };
-        fade.Start();
+        _fade.Start();
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        base.OnFormClosed(e);
+        if (ReferenceEquals(_current, this)) _current = null; // Close() of a modeless form disposes it
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _timer.Dispose();
+            _fade?.Dispose();
+            _fade = null;
+        }
+        base.Dispose(disposing);
     }
 
     protected override void OnShown(EventArgs e)

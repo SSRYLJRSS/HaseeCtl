@@ -21,7 +21,13 @@ public sealed class KeyboardLightService(Dchu dchu, Capabilities caps)
     public const int Command = 103;
     private const int AppPage = 2;
 
-    public int KeyboardType => dchu.GetWmiPackage(13)[15];
+    public const int MinBrightness = 1;
+    public const int MaxBrightness = 4;
+
+    private int? _keyboardType;
+
+    /// <summary>Keyboard type from WMI 13; fixed hardware, read once.</summary>
+    public int KeyboardType => _keyboardType ??= dchu.GetWmiPackage(13)[15];
     public bool IsRgb => KeyboardType is 6 or 22;
     public bool Supported => caps.Lightbar || IsRgb;
 
@@ -42,13 +48,10 @@ public sealed class KeyboardLightService(Dchu dchu, Capabilities caps)
 
     public void SetBrightness(int level)
     {
-        int v = Math.Clamp(level, 1, 4);
+        int v = Math.Clamp(level, MinBrightness, MaxBrightness);
         Send(0xF4000000u + (uint)(47 * v));
         dchu.WriteAppByte(AppPage, 35, (byte)v);
     }
-
-    public void BrightnessUp() => SetBrightness(Brightness + 1);
-    public void BrightnessDown() => SetBrightness(Brightness - 1);
 
     /// <summary>SetColour(part, rgb) - parts 1=left 2=mid 3=right 8=all 7=tp.</summary>
     public void SetColor(int part, byte r, byte g, byte b)
@@ -99,13 +102,14 @@ public sealed class KeyboardLightService(Dchu dchu, Capabilities caps)
 
     private uint BuildOnValue()
     {
+        var p = dchu.ReadAppPage(AppPage); // one driver read instead of five
         uint v = 7;
         v |= 1u << 12;
-        v |= (uint)(dchu.ReadAppByte(AppPage, 100) == 1 ? 1 : 0) << 13;
-        v |= (uint)(dchu.ReadAppByte(AppPage, 96) == 1 ? 1 : 0) << 15;
-        v |= (uint)(dchu.ReadAppByte(AppPage, 84) == 1 ? 1 : 0) << 16;
-        v |= (uint)(dchu.ReadAppByte(AppPage, 88) == 1 ? 1 : 0) << 17;
-        v |= (uint)(dchu.ReadAppByte(AppPage, 92) == 1 ? 1 : 0) << 18;
+        v |= (uint)(p[100] == 1 ? 1 : 0) << 13;
+        v |= (uint)(p[96] == 1 ? 1 : 0) << 15;
+        v |= (uint)(p[84] == 1 ? 1 : 0) << 16;
+        v |= (uint)(p[88] == 1 ? 1 : 0) << 17;
+        v |= (uint)(p[92] == 1 ? 1 : 0) << 18;
         return v;
     }
 

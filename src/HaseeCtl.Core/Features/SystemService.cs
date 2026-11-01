@@ -83,8 +83,17 @@ public sealed class SystemService(Dchu dchu, Capabilities caps)
     {
         bool target = !AirplaneOn();
         Try(() => dchu.SetWmi(121, 26, (uint)(target ? 1 : 0)));
+        // DLL 抛异常说明这一次切换没做成，返回切换前的状态（即 !target），
+        // 让调用方显示的 OSD/文字是真实状态而不是谎报成功。
+        // 注意：不能改成"成功后读回 AirplaneOn()"，RadioKey 由 Windows 的
+        // WlanRadioManager 维护，本程序和 InsydeAirplanemodehid.dll 都不写它，
+        // 读回值永远是旧值，只会把成功误报成失败。
         try { SetAirplaneMode(target ? 1 : 0); }
-        catch (Exception ex) { Log.Write("InsydeAirplanemodehid 调用失败: " + ex.Message); }
+        catch (Exception ex)
+        {
+            Log.Write("InsydeAirplanemodehid 调用失败: " + ex.Message);
+            return !target;
+        }
         Log.Write("飞行模式 -> " + (target ? "开" : "关"));
         return target;
     }
@@ -126,9 +135,9 @@ public sealed class SystemService(Dchu dchu, Capabilities caps)
     /// <summary>官方 WakePanelUp_Hook 的鼠标唤醒：SetWMI(94,1) 点亮 EC 关掉的背光。</summary>
     public void WakePanel() => Try(() => dchu.SetWmi(94, 1));
 
-    private static void Try(Action a)
+    private static void Try(Action a, [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
-        try { a(); } catch (Exception ex) { Log.Write("系统功能调用失败: " + ex.Message); }
+        try { a(); } catch (Exception ex) { Log.Error("系统功能调用失败 (" + caller + ")", ex); }
     }
 
     /// <summary>Windows 内置的触控板开关快捷键 Ctrl+Win+F24（官方用 keybd_event 发同一组合）。</summary>
